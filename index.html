@@ -3,95 +3,143 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Klang Valley Rail Transit Map</title>
+  <title>Klang Valley Train Stations</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; }
+
+    .app { display: flex; flex-direction: column; height: 100%; }
+
+    header {
+      background: #1a1a2e;
+      color: white;
+      padding: 14px 24px;
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    header span { background: #e94560; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 400; }
+
+    .body { display: flex; flex: 1; min-height: 0; }
+
+    .map-wrapper { flex: 7; position: relative; }
     #map { height: 100%; width: 100%; }
 
-    .search-container {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1000;
-      width: 300px;
+    .panel {
+      flex: 3;
       background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-      overflow: visible;
-    }
-    .search-container input {
-      width: 100%;
-      padding: 12px 16px;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      outline: none;
-    }
-    #results {
-      list-style: none;
-      max-height: 300px;
       overflow-y: auto;
-      display: none;
-      border-top: 1px solid #eee;
+      padding: 16px 20px;
+      border-left: 1px solid #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .panel h2 { font-size: 15px; color: #333; margin-bottom: 4px; }
+
+    .filter-section {
+      background: #fafafa;
+      border-radius: 8px;
+      padding: 14px;
+      border: 1px solid #eee;
+    }
+    .filter-section h3 { font-size: 13px; color: #666; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .type-checkboxes { display: flex; flex-direction: column; gap: 8px; }
+    .type-checkbox {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 14px; cursor: pointer;
+      padding: 4px 0;
+    }
+    .type-checkbox input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #1a1a2e; }
+    .type-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+    .distance-section { display: flex; flex-direction: column; gap: 6px; }
+    .distance-section label { font-size: 13px; color: #555; }
+    .distance-section input[type="range"] { width: 100%; accent-color: #1a1a2e; }
+    .distance-value { font-size: 13px; color: #888; text-align: right; }
+
+    .count-badge { font-size: 13px; color: #888; margin-top: -8px; }
+
+    .search-section input {
+      width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 6px;
+      font-size: 14px; outline: none; transition: border 0.15s;
+    }
+    .search-section input:focus { border-color: #1a1a2e; }
+
+    #results {
+      list-style: none; max-height: 220px; overflow-y: auto; margin-top: 4px;
+      display: none; border: 1px solid #eee; border-radius: 6px;
     }
     #results.active { display: block; }
     #results li {
-      padding: 10px 16px;
-      cursor: pointer;
-      font-size: 13px;
-      transition: background 0.15s;
+      padding: 8px 12px; cursor: pointer; font-size: 13px;
+      transition: background 0.15s; border-bottom: 1px solid #f5f5f5;
     }
     #results li:hover { background: #f0f0f0; }
     #results li.no-results { color: #999; cursor: default; }
 
     #station-details {
-      position: absolute;
-      bottom: 30px;
-      left: 10px;
-      z-index: 1000;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-      padding: 16px;
-      min-width: 250px;
-      display: none;
+      background: #fafafa; border-radius: 8px; padding: 14px;
+      border: 1px solid #eee; display: none;
     }
     #station-details:not(:empty) { display: block; }
-    #station-details h3 { margin-bottom: 8px; font-size: 16px; }
+    #station-details h3 { font-size: 15px; margin-bottom: 8px; }
     #station-details table { width: 100%; border-collapse: collapse; }
-    #station-details td {
-      padding: 4px 8px;
-      font-size: 13px;
-      vertical-align: top;
-    }
-    #station-details td:first-child { white-space: nowrap; color: #555; }
+    #station-details td { padding: 3px 6px; font-size: 13px; vertical-align: top; }
+    #station-details td:first { white-space: nowrap; color: #555; }
 
     .legend {
-      background: white;
-      padding: 10px 14px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-      font-size: 13px;
-      line-height: 2;
+      background: white; padding: 10px 14px; border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12); font-size: 13px; line-height: 2;
     }
     .legend h4 { margin-bottom: 4px; font-size: 14px; }
     .legend-item { display: flex; align-items: center; }
-
     .station-marker { background: none !important; border: none !important; }
 
-    @media (max-width: 600px) {
-      .search-container { width: calc(100% - 20px); }
+    @media (max-width: 800px) {
+      .body { flex-direction: column; }
+      .panel { flex: none; height: 40%; border-left: none; border-top: 1px solid #e0e0e0; }
     }
   </style>
 </head>
 <body>
-  <div class="search-container">
-    <input id="search" type="text" placeholder="Search station, code, or line..." />
-    <ul id="results"></ul>
+  <div class="app">
+    <header>Klang Valley train stations <span>216 stations</span></header>
+    <div class="body">
+      <div class="map-wrapper">
+        <div id="map"></div>
+      </div>
+      <div class="panel">
+        <div class="search-section">
+          <h2>Search</h2>
+          <input id="search" type="text" placeholder="Station name, code, or line..." />
+          <ul id="results"></ul>
+        </div>
+
+        <div class="filter-section">
+          <h3>Train type</h3>
+          <div class="type-checkboxes" id="type-filters"></div>
+        </div>
+
+        <div class="filter-section">
+          <h3>Maximum distance from center</h3>
+          <div class="distance-section">
+            <input type="range" id="distance-slider" min="5" max="150" value="150" step="5" />
+            <div class="distance-value" id="distance-label">150 km</div>
+          </div>
+        </div>
+
+        <div class="count-badge" id="count-label">Showing 216 stations</div>
+
+        <div id="station-details"></div>
+      </div>
+    </div>
   </div>
-  <div id="station-details"></div>
-  <div id="map"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

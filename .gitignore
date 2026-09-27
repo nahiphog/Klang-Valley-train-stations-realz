@@ -3,3 +3,5 @@ dist
 .vite
 *.py
 station_coords.json
+.vercel
+.env*

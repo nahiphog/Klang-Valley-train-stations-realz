@@ -3,8 +3,10 @@ import "leaflet/dist/leaflet.css";
 import { stations } from "./stations";
 import type { Station } from "./types";
 
+const mapCenter: [number, number] = [3.07, 101.65];
+
 const map = L.map("map", {
-  center: [3.07, 101.65],
+  center: mapCenter,
   zoom: 11,
   zoomControl: true,
 });
@@ -22,6 +24,8 @@ const typeColors: Record<string, string> = {
   BRT: "#9C27B0",
   "Airport rail link": "#2196F3",
 };
+
+const allTypes = Object.keys(typeColors);
 
 function getColor(types: string[]): string {
   for (const t of types) {
@@ -43,51 +47,99 @@ function codesSummary(codes: string[]): string {
   return codes.join(" / ");
 }
 
-const markerLayer = L.layerGroup();
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+const markerLayer = L.layerGroup().addTo(map);
+let allMarkers: { station: Station; marker: L.Marker }[] = [];
 
 const searchInput = document.getElementById("search") as HTMLInputElement;
 const resultsList = document.getElementById("results") as HTMLUListElement;
 const stationDetails = document.getElementById("station-details") as HTMLDivElement;
+const countLabel = document.getElementById("count-label") as HTMLDivElement;
+const distanceSlider = document.getElementById("distance-slider") as HTMLInputElement;
+const distanceLabel = document.getElementById("distance-label") as HTMLDivElement;
+const typeFiltersContainer = document.getElementById("type-filters") as HTMLDivElement;
 
 let selectedMarker: L.Marker | null = null;
 const markerMap = new Map<string, L.Marker>();
 
-for (const station of stations) {
+function createMarker(station: Station): L.Marker {
   const color = getColor(station.type);
   const icon = L.divIcon({
     className: "station-marker",
-    html: `<div style="
-      width: 14px; height: 14px;
-      background: ${color};
-      border: 2px solid white;
-      border-radius: 50%;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-    "></div>`,
+    html: `<div style="width:14px;height:14px;background:${color};border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>`,
     iconSize: [14, 14],
     iconAnchor: [7, 7],
   });
-
   const marker = L.marker([station.latitude, station.longitude], { icon });
 
-  marker.bindTooltip(station.station_name, {
-    direction: "top",
-    offset: [0, -8],
-  });
+  marker.bindTooltip(station.station_name, { direction: "top", offset: [0, -8] });
 
   marker.on("click", () => {
     showStation(station);
-    if (selectedMarker) {
-      selectedMarker.setZIndexOffset(0);
-    }
+    if (selectedMarker) selectedMarker.setZIndexOffset(0);
     marker.setZIndexOffset(1000);
     selectedMarker = marker;
   });
 
-  markerLayer.addLayer(marker);
+  return marker;
+}
+
+for (const station of stations) {
+  const marker = createMarker(station);
+  allMarkers.push({ station, marker });
   markerMap.set(station.station_name, marker);
 }
 
-map.addLayer(markerLayer);
+let activeTypeFilters = new Set(allTypes);
+let maxDistanceKm = 150;
+
+function getFilteredStations(): Station[] {
+  const center = map.getCenter();
+  return stations.filter((s) => {
+    if (!s.type.some((t) => activeTypeFilters.has(t))) return false;
+    if (maxDistanceKm < 150) {
+      const d = haversineKm(center.lat, center.lng, s.latitude, s.longitude);
+      if (d > maxDistanceKm) return false;
+    }
+    return true;
+  });
+}
+
+function applyFilters(): void {
+  const filtered = getFilteredStations();
+  const filteredSet = new Set(filtered);
+
+  markerLayer.clearLayers();
+  for (const { station, marker } of allMarkers) {
+    if (filteredSet.has(station)) {
+      markerLayer.addLayer(marker);
+    }
+  }
+
+  countLabel.textContent = `Showing ${filtered.length} stations`;
+
+  const q = searchInput.value.trim().toLowerCase();
+  if (q.length >= 1) {
+    const searchResults = filtered.filter(
+      (s) =>
+        s.station_name.toLowerCase().includes(q) ||
+        s.station_code.some((c) => c.toLowerCase().includes(q)) ||
+        s.line.some((l) => l.toLowerCase().includes(q))
+    );
+    renderSearchResults(searchResults, q.length >= 1);
+  }
+}
 
 function showStation(station: Station): void {
   stationDetails.innerHTML = `
@@ -102,79 +154,96 @@ function showStation(station: Station): void {
   `;
 }
 
-// Search
-function filterStations(query: string): Station[] {
-  const q = query.toLowerCase();
-  return stations.filter(
-    (s) =>
-      s.station_name.toLowerCase().includes(q) ||
-      s.station_code.some((c) => c.toLowerCase().includes(q)) ||
-      s.line.some((l) => l.toLowerCase().includes(q))
-  );
-}
-
-let searchTimeout: ReturnType<typeof setTimeout>;
-
-searchInput.addEventListener("input", () => {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => {
-    const q = searchInput.value.trim();
-    if (q.length < 1) {
-      resultsList.innerHTML = "";
-      resultsList.classList.remove("active");
-      return;
-    }
-    const results = filterStations(q);
-    resultsList.innerHTML = "";
-    resultsList.classList.add("active");
-
-    if (results.length === 0) {
+function renderSearchResults(results: Station[], isActive: boolean): void {
+  resultsList.innerHTML = "";
+  if (!isActive || results.length === 0) {
+    resultsList.classList.remove("active");
+    if (isActive) {
       const li = document.createElement("li");
       li.textContent = "No stations found";
       li.classList.add("no-results");
       resultsList.appendChild(li);
-      return;
+      resultsList.classList.add("active");
     }
+    return;
+  }
+  resultsList.classList.add("active");
+  for (const station of results.slice(0, 50)) {
+    const li = document.createElement("li");
+    li.textContent = `${station.station_name} (${codesSummary(station.station_code)})`;
+    li.addEventListener("click", () => {
+      const marker = markerMap.get(station.station_name);
+      if (marker) {
+        map.setView([station.latitude, station.longitude], 15);
+        marker.fire("click");
+      }
+      resultsList.classList.remove("active");
+      searchInput.value = station.station_name;
+    });
+    resultsList.appendChild(li);
+  }
+}
 
-    for (const station of results.slice(0, 50)) {
-      const li = document.createElement("li");
-      li.textContent = `${station.station_name} (${codesSummary(station.station_code)})`;
-      li.addEventListener("click", () => {
-        const marker = markerMap.get(station.station_name);
-        if (marker) {
-          map.setView([station.latitude, station.longitude], 15);
-          marker.fire("click");
-        }
-        resultsList.innerHTML = "";
-        resultsList.classList.remove("active");
-        searchInput.value = station.station_name;
-      });
-      resultsList.appendChild(li);
-    }
+// Type filter checkboxes
+for (const type of allTypes) {
+  const label = document.createElement("label");
+  label.className = "type-checkbox";
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = true;
+  cb.addEventListener("change", () => {
+    if (cb.checked) activeTypeFilters.add(type);
+    else activeTypeFilters.delete(type);
+    applyFilters();
+  });
+  const dot = document.createElement("span");
+  dot.className = "type-dot";
+  dot.style.background = typeColors[type];
+  label.append(cb, dot, document.createTextNode(" " + type));
+  typeFiltersContainer.appendChild(label);
+}
+
+// Distance slider
+distanceSlider.addEventListener("input", () => {
+  maxDistanceKm = parseInt(distanceSlider.value);
+  distanceLabel.textContent = maxDistanceKm >= 150 ? "No limit" : `${maxDistanceKm} km`;
+  applyFilters();
+});
+
+// Search
+let searchTimeout: ReturnType<typeof setTimeout>;
+searchInput.addEventListener("input", () => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    const q = searchInput.value.trim().toLowerCase();
+    const filtered = getFilteredStations();
+    const results = q.length >= 1
+      ? filtered.filter(
+          (s) =>
+            s.station_name.toLowerCase().includes(q) ||
+            s.station_code.some((c) => c.toLowerCase().includes(q)) ||
+            s.line.some((l) => l.toLowerCase().includes(q))
+        )
+      : [];
+    renderSearchResults(results, q.length >= 1);
   }, 150);
 });
 
 document.addEventListener("click", (e) => {
-  if (!(e.target as HTMLElement).closest(".search-container")) {
+  if (!(e.target as HTMLElement).closest(".search-section")) {
     resultsList.classList.remove("active");
   }
 });
 
-// Legend control
+// Legend
 class LegendControl extends L.Control {
   onAdd(_map: L.Map): HTMLElement {
     const div = L.DomUtil.create("div", "legend");
     div.innerHTML = "<h4>Legend</h4>";
     for (const [label, color] of Object.entries(typeColors)) {
-      div.innerHTML += `
-        <div class="legend-item">
-          <span style="background:${color};display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;"></span>
-          ${label}
-        </div>
-      `;
+      div.innerHTML += `<div class="legend-item"><span style="background:${color};display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;"></span>${label}</div>`;
     }
     return div;
   }
 }
-
 new LegendControl({ position: "bottomright" }).addTo(map);
