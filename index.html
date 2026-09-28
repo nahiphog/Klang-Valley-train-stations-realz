@@ -79,6 +79,18 @@
     .locate-btn:hover { background: #e94560; }
     .locate-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
+    .route-section { display: flex; flex-direction: column; gap: 8px; }
+    .route-section select {
+      width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px;
+      font-size: 13px; outline: none; background: white;
+    }
+    .route-section select:focus { border-color: #1a1a2e; }
+    #route-info {
+      font-size: 13px; line-height: 1.6; padding: 8px; background: #f0f0f0;
+      border-radius: 6px; display: none; max-height: 180px; overflow-y: auto;
+    }
+    #route-info.active { display: block; }
+
     #results {
       list-style: none; max-height: 220px; overflow-y: auto; margin-top: 4px;
       display: none; border: 1px solid #eee; border-radius: 6px;
@@ -147,6 +159,16 @@
         <div class="count-badge" id="count-label">Showing 216 stations</div>
 
         <div id="station-details"></div>
+
+        <div class="filter-section">
+          <h3>Route planner</h3>
+          <div class="route-section">
+            <select id="route-from"><option value="">From station...</option></select>
+            <select id="route-to"><option value="">To station...</option></select>
+            <button id="route-btn" class="locate-btn">🗺️ Plan route</button>
+            <div id="route-info"></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
