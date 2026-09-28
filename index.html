@@ -71,6 +71,14 @@
     }
     .search-section input:focus { border-color: #1a1a2e; }
 
+    .locate-btn {
+      width: 100%; padding: 10px 14px; border: none; border-radius: 6px;
+      background: #1a1a2e; color: white; font-size: 14px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .locate-btn:hover { background: #e94560; }
+    .locate-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
     #results {
       list-style: none; max-height: 220px; overflow-y: auto; margin-top: 4px;
       display: none; border: 1px solid #eee; border-radius: 6px;
@@ -120,6 +128,8 @@
           <input id="search" type="text" placeholder="Station name, code, or line..." />
           <ul id="results"></ul>
         </div>
+
+        <button id="locate-btn" class="locate-btn">📍 Use my location</button>
 
         <div class="filter-section">
           <h3>Train type</h3>

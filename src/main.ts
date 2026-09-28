@@ -235,6 +235,46 @@ document.addEventListener("click", (e) => {
   }
 });
 
+// Locate me
+const locateBtn = document.getElementById("locate-btn") as HTMLButtonElement;
+let userMarker: L.Marker | null = null;
+
+locateBtn.addEventListener("click", () => {
+  if (!navigator.geolocation) {
+    locateBtn.textContent = "Geolocation not supported";
+    return;
+  }
+  locateBtn.disabled = true;
+  locateBtn.textContent = "Locating...";
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords;
+      map.setView([latitude, longitude], 14);
+
+      if (userMarker) map.removeLayer(userMarker);
+      const icon = L.divIcon({
+        className: "station-marker",
+        html: `<div style="width:18px;height:18px;background:#e94560;border:3px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      });
+      userMarker = L.marker([latitude, longitude], { icon }).addTo(map);
+      userMarker.bindTooltip("You are here", { direction: "top" }).openTooltip();
+
+      locateBtn.textContent = "📍 Use my location";
+      locateBtn.disabled = false;
+    },
+    () => {
+      locateBtn.textContent = "Location denied";
+      locateBtn.disabled = false;
+      setTimeout(() => {
+        locateBtn.textContent = "📍 Use my location";
+      }, 2500);
+    },
+  );
+});
+
 // Legend
 class LegendControl extends L.Control {
   onAdd(_map: L.Map): HTMLElement {
